@@ -1,3 +1,14 @@
-opencv-python
-numpy
-google-generativeai
+# Core dependencies for ATLAS Robot
+opencv-python>=4.8.0
+numpy>=1.24.0
+google-generativeai>=0.3.0
+
+# Optional dependencies for speech (uncomment when ready to use)
+# SpeechRecognition>=3.10.0
+# pyttsx3>=2.90
+# pyaudio>=0.2.13
+
+# Hardware control (install when connecting to Raspberry Pi)
+# RPi.GPIO>=0.7.1
+# Adafruit-PCA9685>=1.0.1
+# adafruit-circuitpython-motor>=3.4.0
