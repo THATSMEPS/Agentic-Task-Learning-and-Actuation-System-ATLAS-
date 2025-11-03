@@ -25,7 +25,7 @@ All code is complete with hardware commands written as comments and print statem
 ### Core Modules
 
 1. **agent.py** - Main orchestration and state machine
-2. **vision.py** - Computer vision and object detection
+2. **vision_yolo.py** - YOLOv8-based object detection with color filtering
 3. **navigation.py** - Path planning and visual servoing
 4. **motor_control.py** - 4-wheel drive control and obstacle avoidance
 5. **arm_control.py** - 4-DOF robotic arm control
@@ -66,8 +66,8 @@ pip install -r requirements.txt
 
 2. **Test Individual Modules**
    ```bash
-   # Test vision system (uses laptop camera)
-   python vision.py
+   # Test YOLOv8 vision system (uses laptop camera)
+   python vision_yolo.py
    
    # Test motor control simulation
    python motor_control.py
@@ -96,17 +96,31 @@ pip install -r requirements.txt
 
 ## 💻 Testing Without Hardware
 
-### Vision System Testing
+### Vision System Testing (YOLOv8)
 
-The vision system can use your laptop camera to detect objects:
+The vision system uses YOLOv8 for robust object detection with your laptop camera:
 
-1. Run `python vision.py`
-2. When prompted, enter target object (e.g., "blue phone", "red cup")
-3. Point camera at colored objects
-4. System will detect, track, and estimate distance
+1. Run `python vision_yolo.py`
+2. Enter target object (e.g., "phone", "cup", "laptop")
+3. Optionally enter color (e.g., "blue", "red") for color filtering
+4. Point camera at objects
+5. System will detect, track, and show live distance
+
+**What You'll See:**
+- Green bounding box around detected object
+- Live distance in cm above the box
+- Blue center crosshair
+- Direction guidance ("TURN LEFT", "TURN RIGHT", "MOVE FORWARD")
+- Yellow line from center to object
+
+**Features:**
+- Detects 80+ object classes (COCO dataset)
+- Optional color filtering for specific colored objects
+- Live distance calculation using calibrated focal length
+- No infinite logging spam
+- Smooth 30fps video feed
 
 **Commands:**
-- Press 's' to change target object
 - Press 'q' to quit
 
 ### Example Commands
@@ -131,9 +145,10 @@ When running `main.py`, try these commands:
 ### ✅ Month 2 Goals (Autonomy)
 - [x] Obstacle avoidance with ultrasonic sensors (simulated)
 - [x] Camera integration (laptop camera for testing)
-- [x] Object detection with dynamic color/object recognition
+- [x] YOLOv8 object detection (80+ classes, robust recognition)
+- [x] Optional color filtering for specific colored objects
 - [x] Visual servoing for approach control
-- [x] Distance estimation using pixel analysis
+- [x] Live distance estimation with calibrated focal length
 - [x] Lawnmower search pattern
 
 ### ✅ Month 3 Goals (AI Integration)
@@ -168,12 +183,25 @@ Distance is estimated using the pinhole camera model:
 Distance = (Real Object Width × Focal Length) / Pixel Width
 ```
 
+**YOLOv8 Integration:**
+- Detects 80+ object classes automatically
+- Uses bounding box width for distance calculation
+- Focal length calibrated for your camera (700 pixels)
+
 **Calibrated Object Sizes:**
 - Phone: 15 cm
 - Book: 20 cm
 - Cup: 8 cm
-- Ball: 10 cm
-- Pen: 1.5 cm
+- Laptop: 35 cm
+- Mouse: 10 cm
+- Keyboard: 40 cm
+- Bottle: 7 cm
+- And more...
+
+**Color Filtering (Optional):**
+- If you specify a color (e.g., "blue phone"), the system filters detections by color
+- Uses HSV color space for robust color matching
+- Works in various lighting conditions
 
 ### Search Pattern
 
@@ -233,7 +261,7 @@ pip install SpeechRecognition pyttsx3 pyaudio
 The Atlas Robot/
 ├── main.py                 # Main entry point
 ├── agent.py                # Main orchestration & state machine
-├── vision.py               # Computer vision & object detection
+├── vision_yolo.py          # YOLOv8 object detection & color filtering
 ├── navigation.py           # Path planning & visual servoing
 ├── motor_control.py        # Mobility control
 ├── arm_control.py          # Manipulation control
@@ -241,6 +269,7 @@ The Atlas Robot/
 ├── speech_interface.py     # Voice I/O
 ├── config.py               # Configuration parameters
 ├── requirements.txt        # Python dependencies
+├── yolov8n.pt              # YOLOv8 nano model (auto-downloads)
 └── test_videos/            # Test videos for vision (optional)
 ```
 
@@ -278,9 +307,11 @@ The Atlas Robot/
 
 ### Object Not Detected
 - Adjust lighting conditions
-- Ensure object color matches target
-- Fine-tune HSV color ranges in `vision.py`
-- Try larger, more colorful objects
+- YOLOv8 works best with clear, unobstructed objects
+- If using color filter, ensure object has significant visible color
+- Try without color filter first (leave color blank)
+- Lower HSV threshold is set to 15% for better matching
+- Check that object class is in COCO dataset (80 common objects)
 
 ### API Errors
 - Verify GEMINI_API_KEY is set correctly
@@ -308,6 +339,7 @@ Educational project - feel free to use and modify for learning purposes.
 
 - Built for robotics education and demonstration
 - Uses Google Gemini for natural language understanding
+- YOLOv8 by Ultralytics for robust object detection
 - OpenCV for computer vision
 - Designed for Raspberry Pi deployment
 

@@ -1,6 +1,7 @@
 # agent.py
 import time
 from enum import Enum
+import cv2
 import config
 from vision import VisionSystem
 from navigation import NavigationPlanner, VisualServoing
@@ -160,49 +161,111 @@ class Agent:
     def _searching_state(self):
         """Searching state - look for the target object using lawnmower pattern."""
         print(f"\n[AGENT] - SEARCHING for '{self.current_plan.get('object_description')}'...")
+        print("[AGENT] - Video feed window will open - point camera at target object!")
+        print("[AGENT] - Press 'q' to abort search")
         
         if self.voice:
             self.voice.respond(f"Searching for {self.current_plan.get('object_description')}", async_speech=True)
         
-        # Generate search pattern
-        waypoints = self.nav_planner.generate_lawnmower_path(5, 3, 0.5)
-        
-        # Search loop
-        object_found = False
-        for i, point in enumerate(waypoints):
-            print(f"[AGENT] - Moving to search waypoint {i+1}/{len(waypoints)}: {point}")
+        # In simulation mode, we search by continuously monitoring camera
+        # On real robot, this would execute lawnmower pattern
+        if self.use_laptop_camera:
+            # LAPTOP MODE: Continuous camera monitoring (smooth video)
+            print("[AGENT] - SIMULATION MODE: Point camera at object to detect it")
             
-            # Check for obstacles before moving
-            if not self.obstacles.is_path_clear('front'):
-                print("[AGENT] - Obstacle detected during search!")
-                self.obstacles.avoid_obstacle(self.motors)
+            object_found = False
+            frame_count = 0
             
-            # Navigate to waypoint
-            self.motors.navigate_to_point(point[0], point[1])
-            self.nav_planner.record_breadcrumb(point)
-            
-            # Look for object at this location
-            frame = self.vision.capture_frame()
-            if frame:
-                detection = self.vision.find_target_object(frame)
-                if detection:
-                    print(f"[AGENT] - ✓ OBJECT DETECTED!")
-                    print(f"[AGENT] - Estimated distance: {detection.get('distance', 'unknown')} cm")
+            while not object_found:
+                # Capture and process frame
+                frame = self.vision.capture_frame()
+                if frame is not None:
+                    detection = self.vision.find_target_object(frame)
+                    servoing_error = None
                     
-                    if self.voice:
-                        self.voice.respond("I found it! Approaching now", async_speech=True)
+                    if detection:
+                        servoing_error = self.vision.calculate_visual_servoing_error(frame, detection)
+                        print(f"[AGENT] - ✓ OBJECT DETECTED!")
+                        print(f"[AGENT] - Estimated distance: {detection.get('distance', 'unknown')} cm")
+                        
+                        if self.voice:
+                            self.voice.respond("I found it! Approaching now", async_speech=True)
+                        
+                        object_found = True
+                        # Show detection for 1 second before approaching
+                        display_frame = self.vision.draw_detection_overlay(frame, detection, servoing_error)
+                        cv2.imshow("ATLAS Searching - Object Found!", display_frame)
+                        cv2.waitKey(1000)
+                        self.state = AgentState.APPROACHING
+                        break
                     
-                    object_found = True
-                    self.state = AgentState.APPROACHING
+                    # Display live feed during search (smooth like vision.py)
+                    display_frame = self.vision.draw_detection_overlay(frame, detection, servoing_error)
+                    cv2.imshow("ATLAS Searching - Press 'q' to abort", display_frame)
+                    
+                    # Print searching status occasionally
+                    if frame_count % 90 == 0:
+                        print("[AGENT] - Searching... (point camera at target)")
+                    
+                    frame_count += 1
+                    
+                    # Check if user wants to abort (minimal delay for smooth video)
+                    key = cv2.waitKey(30) & 0xFF
+                    if key == ord('q'):
+                        print("[AGENT] - Search aborted by user")
+                        object_found = False
+                        break
+                else:
+                    print("[AGENT] - ERROR: Failed to capture frame")
                     break
             
-            # Small delay between waypoints
-            time.sleep(0.5)
-        
-        if not object_found:
-            print("[AGENT] - Search complete. Object not found in search area.")
-            if self.voice:
-                self.voice.respond("I couldn't find the object in the search area")
+            if not object_found:
+                print("[AGENT] - Search aborted. Returning to IDLE.")
+                self.vision.release_camera()
+                self.state = AgentState.IDLE
+                
+        else:
+            # REAL ROBOT MODE: Execute lawnmower search pattern
+            waypoints = self.nav_planner.generate_lawnmower_path(5, 3, 0.5)
+            
+            object_found = False
+            for i, point in enumerate(waypoints):
+                print(f"[AGENT] - Moving to search waypoint {i+1}/{len(waypoints)}: {point}")
+                
+                # Check for obstacles before moving
+                if not self.obstacles.is_path_clear('front'):
+                    print("[AGENT] - Obstacle detected during search!")
+                    self.obstacles.avoid_obstacle(self.motors)
+                
+                # Navigate to waypoint
+                self.motors.navigate_to_point(point[0], point[1])
+                self.nav_planner.record_breadcrumb(point)
+                
+                # Look for object at this location
+                frame = self.vision.capture_frame()
+                if frame is not None:
+                    detection = self.vision.find_target_object(frame)
+                    
+                    if detection:
+                        print(f"[AGENT] - ✓ OBJECT DETECTED!")
+                        print(f"[AGENT] - Estimated distance: {detection.get('distance', 'unknown')} cm")
+                        
+                        if self.voice:
+                            self.voice.respond("I found it! Approaching now", async_speech=True)
+                        
+                        object_found = True
+                        self.state = AgentState.APPROACHING
+                        break
+                
+                # Small delay between waypoints
+                time.sleep(0.5)
+            
+            if not object_found:
+                print("[AGENT] - Search complete. Object not found in search area.")
+                if self.voice:
+                    self.voice.respond("I couldn't find the object in the search area")
+                self.vision.release_camera()
+                self.state = AgentState.IDLE
             self.vision.release_camera()
             self.state = AgentState.IDLE
             

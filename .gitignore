@@ -1,1 +1,38 @@
+# Environment variables
 .env
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# YOLOv8 model files (auto-downloads if missing)
+yolov8n.pt
+yolov8s.pt
+yolov8m.pt
+yolov8l.pt
+yolov8x.pt
+
+# VS Code
+.vscode/
+
+# Test videos and images
+test_videos/
+test_images/
+*.mp4
+*.avi
+
+# OS files
+.DS_Store
+Thumbs.db
+.venv
+yolo8n.pt
+yolo8s.pt
+__pycache__
+*.pyc

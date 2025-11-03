@@ -139,7 +139,8 @@ def extract_object_info(text_command: str) -> dict | None:
     
     # Common objects
     objects = ['phone', 'book', 'pen', 'pencil', 'cup', 'bottle', 'box', 'ball', 'tool', 
-               'hammer', 'screwdriver', 'wrench', 'notebook', 'marker', 'eraser']
+               'hammer', 'screwdriver', 'wrench', 'notebook', 'marker', 'eraser', 'pillow',
+               'laptop', 'mouse', 'keyboard', 'charger', 'wallet', 'keys', 'remote']
     
     # Extract color
     found_color = 'unknown'
