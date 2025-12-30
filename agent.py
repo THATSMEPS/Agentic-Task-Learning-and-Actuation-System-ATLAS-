@@ -3,7 +3,7 @@ import time
 from enum import Enum
 import cv2
 import config
-from vision import VisionSystem
+from vision_yolo import YOLOVisionSystem
 from navigation import NavigationPlanner, VisualServoing
 from llm_interface import get_plan_from_command, extract_object_info
 from motor_control import MotorController, ObstacleAvoidance
@@ -34,11 +34,12 @@ class Agent:
         """
         self.state = AgentState.IDLE
         self.use_voice = use_voice
+        self.use_laptop_camera = use_laptop_camera
         
         # Initialize all subsystems
         print("[AGENT] - Initializing ATLAS subsystems...")
         
-        self.vision = VisionSystem(use_laptop_camera=use_laptop_camera)
+        self.vision = YOLOVisionSystem(use_laptop_camera=use_laptop_camera)
         self.nav_planner = NavigationPlanner()
         self.motors = MotorController()
         self.obstacles = ObstacleAvoidance()

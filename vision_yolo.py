@@ -38,6 +38,10 @@ class YOLOVisionSystem:
         self.target_object = object_name.lower()
         self.target_color = color.lower() if color else None
         print(f"[YOLOVISION] - Target set: object='{self.target_object}', color='{self.target_color}'")
+    
+    def set_target_object(self, object_description, object_color=None):
+        """Alias for set_target() to match agent.py interface."""
+        self.set_target(object_description, object_color)
 
     def get_real_width(self, class_name):
         # You can expand this dictionary for more accurate sizes
@@ -173,6 +177,125 @@ class YOLOVisionSystem:
             cv2.putText(annotated, search_text, (10, 50), cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 255), 2)
         
         return annotated, found
+    
+    def find_target_object(self, frame):
+        """
+        Find target object in frame and return detection info for agent.py.
+        Returns dict with centroid, area, distance, contour if found, else None.
+        """
+        results = self.model(frame, verbose=False)[0]
+        
+        for box, conf, cls in zip(results.boxes.xyxy.cpu().numpy(),
+                                  results.boxes.conf.cpu().numpy(),
+                                  results.boxes.cls.cpu().numpy()):
+            class_name = self.model.names[int(cls)]
+            
+            # Match class name
+            if self.target_object and self.target_object not in class_name.lower():
+                continue
+            
+            # Match color if specified
+            if self.target_color and not self.color_match(frame, box, self.target_color):
+                continue
+            
+            x1, y1, x2, y2 = map(int, box)
+            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+            pixel_width = x2 - x1
+            area = (x2 - x1) * (y2 - y1)
+            distance = self.estimate_distance(pixel_width, class_name)
+            
+            # Create contour-like structure for compatibility
+            contour = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+            
+            return {
+                'centroid': (cx, cy),
+                'area': area,
+                'distance': distance,
+                'contour': contour,
+                'box': (x1, y1, x2, y2)
+            }
+        
+        return None
+    
+    def calculate_visual_servoing_error(self, frame, detection_result):
+        """Calculate error for visual servoing control."""
+        if detection_result is None:
+            return None
+        
+        center_x = frame.shape[1] // 2
+        center_y = frame.shape[0] // 2
+        
+        obj_x, obj_y = detection_result['centroid']
+        
+        error_x = obj_x - center_x
+        error_y = obj_y - center_y
+        distance = detection_result.get('distance', None)
+        
+        return {
+            'error_x': error_x,
+            'error_y': error_y,
+            'distance': distance,
+            'frame_center': (center_x, center_y),
+            'object_center': (obj_x, obj_y)
+        }
+    
+    def draw_detection_overlay(self, frame, detection_result, servoing_error=None):
+        """Draw visual feedback overlays on frame."""
+        overlay = frame.copy()
+        frame_h, frame_w = frame.shape[:2]
+        center_x, center_y = frame_w // 2, frame_h // 2
+        
+        # Draw blue center crosshair
+        cv2.drawMarker(overlay, (center_x, center_y), (255, 0, 0), cv2.MARKER_CROSS, 30, 3)
+        cv2.putText(overlay, "CENTER", (center_x - 40, center_y - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        
+        if detection_result:
+            x1, y1, x2, y2 = detection_result['box']
+            cx, cy = detection_result['centroid']
+            distance = detection_result.get('distance')
+            
+            # Draw green bounding box
+            cv2.rectangle(overlay, (x1, y1), (x2, y2), (0, 255, 0), 5)
+            
+            # Draw centroid (red dot)
+            cv2.circle(overlay, (cx, cy), 8, (0, 0, 255), -1)
+            
+            # Draw line from center to object (yellow)
+            cv2.line(overlay, (center_x, center_y), (cx, cy), (0, 255, 255), 3)
+            
+            # LARGE distance text above box (GREEN)
+            if distance:
+                dist_text = f"{distance:.1f} cm"
+                text_size = cv2.getTextSize(dist_text, cv2.FONT_HERSHEY_DUPLEX, 1.8, 4)[0]
+                text_x = x1
+                text_y = max(y1 - 15, 50)
+                # Background rectangle for better visibility
+                cv2.rectangle(overlay, (text_x - 5, text_y - text_size[1] - 5), 
+                            (text_x + text_size[0] + 5, text_y + 5), (0, 0, 0), -1)
+                cv2.putText(overlay, dist_text, (text_x, text_y), 
+                           cv2.FONT_HERSHEY_DUPLEX, 1.8, (0, 255, 0), 4)
+            
+            # Direction guidance
+            if servoing_error:
+                error_x = servoing_error['error_x']
+                if abs(error_x) < 50:
+                    guidance = "CENTERED - MOVE FORWARD"
+                    color = (0, 255, 0)
+                elif error_x < -50:
+                    guidance = "<<< TURN LEFT"
+                    color = (0, 165, 255)
+                else:
+                    guidance = "TURN RIGHT >>>"
+                    color = (0, 165, 255)
+                cv2.putText(overlay, guidance, (10, 50), cv2.FONT_HERSHEY_DUPLEX, 1.2, color, 3)
+        else:
+            # Searching message
+            search_text = f"SEARCHING FOR: {self.target_object}"
+            if self.target_color:
+                search_text += f" ({self.target_color})"
+            cv2.putText(overlay, search_text, (10, 50), cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 255), 2)
+        
+        return overlay
 
     def run_live(self):
         print("=== YOLOv8 Vision System Test ===")
